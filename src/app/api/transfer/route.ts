@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { ethers } from "ethers";
 import { MongoClient } from "mongodb";
-import { GET as getPubKey } from '../pubkey/[telegramId]/route';
+import { Telegraf } from "telegraf";
+import { GET as getPubKey } from "../pubkey/[telegramId]/route";
 
 // Basic ABI for transfer function
 const ABI = [
@@ -32,7 +33,7 @@ export async function POST(request: Request) {
       console.log("Attempting to fetch public key for telegramId:", telegramId);
 
       const pubKeyResponse = await getPubKey(
-        { params: { telegramId: telegramId.toString() } }  // Ensure telegramId is a string
+        { params: { telegramId: telegramId.toString() } } // Ensure telegramId is a string
       );
 
       console.log("Public key response status:", pubKeyResponse.status);
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
             error: "Failed to fetch target public key",
             details: errorText,
             telegramId: telegramId,
-            status: pubKeyResponse.status
+            status: pubKeyResponse.status,
           },
           { status: 400 }
         );
@@ -60,7 +61,7 @@ export async function POST(request: Request) {
         return NextResponse.json(
           {
             error: "No public key found in response",
-            response: pubKeyData
+            response: pubKeyData,
           },
           { status: 400 }
         );
@@ -86,14 +87,22 @@ export async function POST(request: Request) {
       const formattedAmount = ethers.getBigInt(amount);
 
       // Ensure public keys and signature are properly formatted hex strings
-      const formattedSourcePubKey = sourcePubKey.startsWith('0x') ? sourcePubKey : `0x${sourcePubKey}`;
-      const formattedTargetPubKey = targetPubKey.startsWith('0x') ? targetPubKey : `0x${targetPubKey}`;
-      const formattedSignature = signature.startsWith('0x') ? signature : `0x${signature}`;
+      const formattedSourcePubKey = sourcePubKey.startsWith("0x")
+        ? sourcePubKey
+        : `0x${sourcePubKey}`;
+      const formattedTargetPubKey = targetPubKey.startsWith("0x")
+        ? targetPubKey
+        : `0x${targetPubKey}`;
+      const formattedSignature = signature.startsWith("0x")
+        ? signature
+        : `0x${signature}`;
 
       // Validate hex strings
-      if (!ethers.isHexString(formattedSourcePubKey) ||
+      if (
+        !ethers.isHexString(formattedSourcePubKey) ||
         !ethers.isHexString(formattedTargetPubKey) ||
-        !ethers.isHexString(formattedSignature)) {
+        !ethers.isHexString(formattedSignature)
+      ) {
         return NextResponse.json(
           { error: "Invalid hex format for public keys or signature" },
           { status: 400 }
@@ -125,6 +134,21 @@ export async function POST(request: Request) {
 
         const receipt = await tx.wait();
         console.log("Transaction receipt:", receipt);
+
+        // Initialize Telegram bot and send notification
+        try {
+          const bot = new Telegraf(process.env.TELEGRAM_BOT_TOKEN!);
+          const usdcAmount = (Number(formattedAmount) / 1_000_000).toFixed(2);
+          const txUrl = `https://base-sepolia.blockscout.com/tx/${receipt.hash}`;
+
+          await bot.telegram.sendMessage(
+            telegramId,
+            `✅ You have received ${usdcAmount} USDC!\n\nView transaction: ${txUrl}`
+          );
+        } catch (telegramError) {
+          console.error("Failed to send Telegram notification:", telegramError);
+          // Don't fail the whole request if Telegram notification fails
+        }
 
         return NextResponse.json({
           success: true,
@@ -161,7 +185,8 @@ export async function POST(request: Request) {
           error: "Transfer failed",
           details: error.message || "Unknown error",
           type: error.code || "UNKNOWN_ERROR",
-          stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+          stack:
+            process.env.NODE_ENV === "development" ? error.stack : undefined,
         },
         { status: 500 }
       );
@@ -179,7 +204,7 @@ export async function POST(request: Request) {
         error: "Transfer failed",
         details: error.message || "Unknown error",
         type: error.code || "UNKNOWN_ERROR",
-        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+        stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
       },
       { status: 500 }
     );
