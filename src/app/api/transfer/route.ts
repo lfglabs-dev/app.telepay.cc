@@ -31,8 +31,12 @@ export async function POST(request: Request) {
     // Call the handler directly
     try {
       console.log("Attempting to fetch public key for telegramId:", telegramId);
+      const nextRequest = new Request(request, {
+        headers: request.headers,
+      });
 
       const pubKeyResponse = await getPubKey(
+        nextRequest as any,
         { params: { telegramId: telegramId.toString() } } // Ensure telegramId is a string
       );
 

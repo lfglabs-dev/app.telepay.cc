@@ -1,9 +1,10 @@
 // ... existing imports and POST handler ...
 
 import { MongoClient } from "mongodb";
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 
 export async function GET(
+    request: NextRequest,
     { params }: { params: { telegramId: string } }
 ) {
     try {
