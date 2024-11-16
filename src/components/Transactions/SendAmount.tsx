@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ArrowUpIcon } from 'lucide-react'
 import { useToast } from "@/hooks/use-toast"
+import { useRouter } from 'next/navigation';
+import { addTransaction } from '@/utils/transactions';
 
 export interface SendAmountProps {
     recipient: {
@@ -30,6 +32,7 @@ export default function SendAmount({
     const [amount, setAmount] = useState('')
     const [isLoading, setIsLoading] = useState(false)
     const { toast } = useToast()
+    const router = useRouter();
 
     const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const value = e.target.value.replace(/[^0-9.]/g, '')
@@ -70,14 +73,26 @@ export default function SendAmount({
                 throw new Error(data.details || data.error || 'Transfer failed')
             }
 
-            toast({
-                title: "Transfer successful",
-                description: `Transaction hash: ${data.txHash}`,
-            })
+            // Store transaction data
+            addTransaction({
+                hash: data.txHash,
+                amount: parseFloat(amount),
+                recipient: {
+                    name: recipient.name,
+                    avatar: recipient.avatar,
+                    telegramId: recipient.telegramId,
+                },
+                timestamp: Date.now(),
+                status: 'completed'
+            });
 
             if (onSend) {
                 onSend(parseFloat(amount))
             }
+
+            // Redirect to home page
+            router.push('/');
+
         } catch (error: any) {
             console.error('Transfer error:', error)
             toast({

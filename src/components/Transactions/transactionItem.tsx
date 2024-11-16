@@ -9,6 +9,7 @@ interface TransactionItemProps {
   avatar?: string;
   verified?: boolean;
   type?: 'user' | 'wallet';
+  hash: string;
 }
 
 export const TransactionItem: FC<TransactionItemProps> = ({
@@ -17,10 +18,16 @@ export const TransactionItem: FC<TransactionItemProps> = ({
   amount,
   avatar,
   verified = false,
-  type = 'user'
+  type = 'user',
+  hash
 }) => {
   return (
-    <div className="flex items-center justify-between">
+    <a
+      href={`https://base-sepolia.blockscout.com/tx/${hash}`}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="flex items-center justify-between hover:bg-zinc-800/50 p-2 rounded-lg transition-colors cursor-pointer"
+    >
       <div className="flex items-center gap-3">
         {type === 'user' ? (
           <Avatar className="h-10 w-10 rounded-full border border-zinc-800">
@@ -41,6 +48,6 @@ export const TransactionItem: FC<TransactionItemProps> = ({
       <div className={`font-medium ${amount > 0 ? 'text-emerald-400' : ''}`}>
         {amount > 0 ? '+' : ''}${Math.abs(amount).toLocaleString()}
       </div>
-    </div>
+    </a>
   );
 };

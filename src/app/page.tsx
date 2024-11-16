@@ -11,11 +11,18 @@ import { useUserDetails } from '@/utils/telegram';
 import { getOrCreateWallet } from '@/utils/storage';
 import { useEffect } from 'react';
 import { useState } from 'react';
+import { getStoredTransactions } from '@/utils/transactions';
+import { Transaction } from '@/types/transaction';
 
 const IndexPage: FC = () => {
   const router = useRouter();
   const user = useUserDetails();
   const [wallet, setWallet] = useState<any>(null);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+
+  useEffect(() => {
+    setTransactions(getStoredTransactions());
+  }, []);
 
   useEffect(() => {
     // Only run if user exists and wallet hasn't been initialized yet
@@ -49,29 +56,22 @@ const IndexPage: FC = () => {
             </div>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="space-y-4">
-              <div className="text-sm font-medium text-zinc-400">12 Nov</div>
-              <TransactionItem
-                name="Fricoben"
-                time="21:19"
-                amount={230.12}
-                avatar="/avatars/fricoben.jpg"
-                verified
-              />
-              <TransactionItem
-                name="Th0rgal"
-                time="21:19"
-                amount={200}
-                avatar="/avatars/th0rgal.png"
-                verified
-              />
-            </div>
-            <Button
-              variant="ghost"
-              className="w-full text-zinc-400 hover:text-white hover:bg-zinc-900"
-            >
-              See All
-            </Button>
+            {transactions.length > 0 ? (
+              <div className="space-y-4">
+                {transactions.map((tx) => (
+                  <TransactionItem
+                    key={tx.hash}
+                    hash={tx.hash}
+                    name={tx.recipient.name}
+                    time={new Date(tx.timestamp).toLocaleTimeString()}
+                    amount={tx.amount}
+                    avatar={tx.recipient.avatar}
+                    verified
+                  />
+                ))}
+              </div>
+            ) : (
+              null)}
           </CardContent>
         </div>
       </div>
