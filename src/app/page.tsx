@@ -20,9 +20,10 @@ const IndexPage: FC = () => {
   useEffect(() => {
     // Only run if user exists and wallet hasn't been initialized yet
     if (user && !wallet) {
-      const wallet = getOrCreateWallet(user.signatureHash);
-      setWallet(wallet);
-      console.log("wallet", wallet);
+      getOrCreateWallet(user.id, user.signatureHash).then((wallet) => {
+        setWallet(wallet);
+        console.log("wallet", wallet);
+      });
     }
   }, [user, wallet]); // Only re-run if user or wallet changes
 
