@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { ethers } from "ethers";
+import { MongoClient } from "mongodb";
+import { GET as getPubKey } from '../pubkey/[telegramId]/route';
 
 // Basic ABI for transfer function
 const ABI = [
@@ -9,71 +11,175 @@ const ABI = [
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const { amount, sourcePubKey, targetPubKey, signature } = body;
+    const { amount, sourcePubKey, telegramId, signature } = body;
 
-    // Input validation and debug request
-    console.log("Request body:", {
-      amount,
-      sourcePubKey: sourcePubKey.substring(0, 10) + "...",
-      targetPubKey: targetPubKey.substring(0, 10) + "...",
-      signature: signature.substring(0, 10) + "...",
-    });
+    // More detailed input logging
+    console.log("Full request body:", body);
+    console.log("Amount type:", typeof amount, "Value:", amount);
+    console.log("Source Public Key:", sourcePubKey);
+    console.log("Telegram ID:", telegramId);
+    console.log("Signature:", signature);
 
-    if (!amount || !sourcePubKey || !targetPubKey || !signature) {
+    if (!amount || !sourcePubKey || !telegramId || !signature) {
       return NextResponse.json(
         { error: "Missing required parameters" },
         { status: 400 }
       );
     }
 
-    // Connect to Base Sepolia
-    const provider = new ethers.JsonRpcProvider(process.env.BASE_SEPOLIA_RPC);
-    const wallet = new ethers.Wallet(process.env.PRIVATE_KEY!, provider);
+    // Call the handler directly
+    try {
+      console.log("Attempting to fetch public key for telegramId:", telegramId);
 
-    console.log("Connected wallet address:", await wallet.getAddress());
+      const pubKeyResponse = await getPubKey(
+        { params: { telegramId: telegramId.toString() } }  // Ensure telegramId is a string
+      );
 
-    // Initialize contract
-    const contract = new ethers.Contract(
-      process.env.TELEPAY_CONTRACT_ADDRESS!,
-      ABI,
-      wallet
-    );
+      console.log("Public key response status:", pubKeyResponse.status);
+      console.log("Public key response ok:", pubKeyResponse.ok);
 
-    // Format parameters
-    const formattedAmount = ethers.getBigInt(amount);
-    const formattedSourcePubKey = ethers.hexlify(sourcePubKey);
-    const formattedTargetPubKey = ethers.hexlify(targetPubKey);
-    const formattedSignature = ethers.hexlify(signature);
+      if (!pubKeyResponse.ok) {
+        const errorText = await pubKeyResponse.text();
+        console.error("Failed to fetch public key. Response:", errorText);
+        return NextResponse.json(
+          {
+            error: "Failed to fetch target public key",
+            details: errorText,
+            telegramId: telegramId,
+            status: pubKeyResponse.status
+          },
+          { status: 400 }
+        );
+      }
 
-    console.log("Formatted parameters:", {
-      amount: formattedAmount.toString(),
-      sourcePubKey: formattedSourcePubKey,
-      targetPubKey: formattedTargetPubKey,
-      signature: formattedSignature,
-    });
+      const pubKeyData = await pubKeyResponse.json();
+      console.log("Public key data received:", pubKeyData);
 
-    // Execute transfer
-    const tx = await contract.transfer(
-      formattedAmount,
-      formattedSourcePubKey,
-      formattedTargetPubKey,
-      formattedSignature
-    );
+      if (!pubKeyData.data?.publicKey) {
+        console.error("No public key found in response:", pubKeyData);
+        return NextResponse.json(
+          {
+            error: "No public key found in response",
+            response: pubKeyData
+          },
+          { status: 400 }
+        );
+      }
 
-    // Wait for transaction confirmation
-    const receipt = await tx.wait();
+      const targetPubKey = pubKeyData.data.publicKey;
+      console.log("Successfully retrieved targetPubKey:", targetPubKey);
 
-    return NextResponse.json({
-      success: true,
-      txHash: receipt.hash,
-    });
+      // Connect to Base Sepolia
+      const provider = new ethers.JsonRpcProvider(process.env.BASE_SEPOLIA_RPC);
+      const wallet = new ethers.Wallet(process.env.PRIVATE_KEY!, provider);
+
+      console.log("Connected wallet address:", await wallet.getAddress());
+
+      // Initialize contract
+      const contract = new ethers.Contract(
+        process.env.TELEPAY_CONTRACT_ADDRESS!,
+        ABI,
+        wallet
+      );
+
+      // Format parameters
+      const formattedAmount = ethers.getBigInt(amount);
+
+      // Ensure public keys and signature are properly formatted hex strings
+      const formattedSourcePubKey = sourcePubKey.startsWith('0x') ? sourcePubKey : `0x${sourcePubKey}`;
+      const formattedTargetPubKey = targetPubKey.startsWith('0x') ? targetPubKey : `0x${targetPubKey}`;
+      const formattedSignature = signature.startsWith('0x') ? signature : `0x${signature}`;
+
+      // Validate hex strings
+      if (!ethers.isHexString(formattedSourcePubKey) ||
+        !ethers.isHexString(formattedTargetPubKey) ||
+        !ethers.isHexString(formattedSignature)) {
+        return NextResponse.json(
+          { error: "Invalid hex format for public keys or signature" },
+          { status: 400 }
+        );
+      }
+
+      console.log("Formatted parameters:", {
+        amount: formattedAmount.toString(),
+        sourcePubKey: formattedSourcePubKey,
+        targetPubKey: formattedTargetPubKey,
+        signature: formattedSignature,
+      });
+
+      // Log contract details
+      console.log("Contract address:", process.env.TELEPAY_CONTRACT_ADDRESS);
+      console.log("RPC URL:", process.env.BASE_SEPOLIA_RPC);
+
+      // Execute transfer with try-catch
+      try {
+        const tx = await contract.transfer(
+          formattedAmount,
+          formattedSourcePubKey,
+          formattedTargetPubKey,
+          formattedSignature,
+          { gasLimit: 500000 } // Add explicit gas limit
+        );
+
+        console.log("Transaction sent:", tx.hash);
+
+        const receipt = await tx.wait();
+        console.log("Transaction receipt:", receipt);
+
+        return NextResponse.json({
+          success: true,
+          txHash: receipt.hash,
+        });
+      } catch (txError: any) {
+        console.error("Transaction error details:", {
+          error: txError,
+          message: txError.message,
+          code: txError.code,
+          data: txError.data,
+        });
+
+        return NextResponse.json(
+          {
+            error: "Transfer failed",
+            details: txError.message,
+            code: txError.code,
+            data: txError.data,
+          },
+          { status: 500 }
+        );
+      }
+    } catch (error: any) {
+      console.error("Transfer error:", {
+        error,
+        message: error.message,
+        code: error.code,
+        stack: error.stack,
+      });
+
+      return NextResponse.json(
+        {
+          error: "Transfer failed",
+          details: error.message || "Unknown error",
+          type: error.code || "UNKNOWN_ERROR",
+          stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
+        },
+        { status: 500 }
+      );
+    }
   } catch (error: any) {
-    console.error("Transfer error:", error);
+    console.error("Transfer error:", {
+      error,
+      message: error.message,
+      code: error.code,
+      stack: error.stack,
+    });
+
     return NextResponse.json(
       {
         error: "Transfer failed",
         details: error.message || "Unknown error",
         type: error.code || "UNKNOWN_ERROR",
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined,
       },
       { status: 500 }
     );

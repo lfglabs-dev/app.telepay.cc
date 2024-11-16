@@ -67,7 +67,8 @@ const SendPage: FC = () => {
             {isEnterPressed ? <SendAmount balance={430.12} recipient={{
                 name: 'Th0rgal',
                 avatar: '/avatars/th0rgal.png',
-            }} onSend={() => setIsEnterPressed(false)} /> : <div className="flex flex-col gap-6 p-6 max-w-md mx-auto">
+                telegramId: '1139694048',
+            }} onSend={() => setIsEnterPressed(false)} sourcePubKey={localStorage.getItem('publicKey') || ''} /> : <div className="flex flex-col gap-6 p-6 max-w-md mx-auto">
                 <h1 className="text-4xl font-bold text-center">How to send</h1>
 
                 <div className="relative">

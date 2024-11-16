@@ -1,3 +1,4 @@
+/* eslint-disable @next/next/no-img-element */
 'use client'
 
 import { useState } from 'react'
@@ -5,25 +6,30 @@ import { Avatar } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { ArrowUpIcon } from 'lucide-react'
+import { useToast } from "@/hooks/use-toast"
 
 export interface SendAmountProps {
-    recipient?: {
+    recipient: {
         name: string
         avatar: string
+        telegramId: string
     }
     balance: number
+    sourcePubKey: string
+    signature?: string
     onSend?: (amount: number) => void
 }
 
 export default function SendAmount({
-    recipient = {
-        name: 'Thomas Marchand',
-        avatar: '/avatars/thomas.jpg',
-    },
+    recipient,
     balance = 87430.12,
+    sourcePubKey,
+    signature = "0x8d99fd45e7e4f88bf06c88b5aa0bb2d088686b3c8caac83f3222e2b2d3f455976f8176089f190849fd827365f952fdf5dda9c30e88446fd570d60119c8c09be71b",
     onSend
 }: SendAmountProps) {
     const [amount, setAmount] = useState('')
+    const [isLoading, setIsLoading] = useState(false)
+    const { toast } = useToast()
 
     const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const value = e.target.value.replace(/[^0-9.]/g, '')
@@ -40,9 +46,47 @@ export default function SendAmount({
         setAmount(value)
     }
 
-    const handleSend = () => {
-        if (onSend && amount) {
-            onSend(parseFloat(amount))
+    const handleSend = async () => {
+        if (!amount) return
+
+        setIsLoading(true)
+        try {
+            const response = await fetch('/api/transfer', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    amount,
+                    sourcePubKey,
+                    telegramId: recipient.telegramId,
+                    signature,
+                }),
+            })
+
+            const data = await response.json()
+
+            if (!response.ok) {
+                throw new Error(data.details || data.error || 'Transfer failed')
+            }
+
+            toast({
+                title: "Transfer successful",
+                description: `Transaction hash: ${data.txHash}`,
+            })
+
+            if (onSend) {
+                onSend(parseFloat(amount))
+            }
+        } catch (error: any) {
+            console.error('Transfer error:', error)
+            toast({
+                title: "Transfer failed",
+                description: error.message || 'An unexpected error occurred',
+                variant: "destructive",
+            })
+        } finally {
+            setIsLoading(false)
         }
     }
 
@@ -77,11 +121,17 @@ export default function SendAmount({
 
                 <Button
                     className="w-full h-14 text-lg bg-blue-500 hover:bg-blue-600 disabled:bg-zinc-800 disabled:text-zinc-500"
-                    disabled={!amount || amount === '0'}
+                    disabled={!amount || amount === '0' || isLoading}
                     onClick={handleSend}
                 >
-                    <ArrowUpIcon className="mr-2 h-5 w-5" />
-                    Send
+                    {isLoading ? (
+                        "Sending..."
+                    ) : (
+                        <>
+                            <ArrowUpIcon className="mr-2 h-5 w-5" />
+                            Send
+                        </>
+                    )}
                 </Button>
             </div>
         </div>
