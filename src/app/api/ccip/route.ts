@@ -16,6 +16,20 @@ interface UserData {
   username: string;
 }
 
+// Add DNS name decoder function
+function dnsDecodeName(data: Uint8Array): string {
+  let offset = 0;
+  const labels = [];
+  while (offset < data.length) {
+    const length = data[offset];
+    if (length === 0) break;
+    offset += 1;
+    labels.push(ethers.toUtf8String(data.slice(offset, offset + length)));
+    offset += length;
+  }
+  return labels.join(".");
+}
+
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as ResolveQuery;
@@ -29,8 +43,9 @@ export async function POST(request: Request) {
     }
 
     // Decode the DNS name
-    const dnsDecodedName = ethers.toUtf8String(ethers.getBytes(name));
-    const username = dnsDecodedName.split(".")[0]; // Extract username from subdomain
+    const nameBytes = ethers.getBytes(name);
+    const dnsDecodedName = dnsDecodeName(nameBytes);
+    const username = dnsDecodedName.split(".")[0].toLowerCase();
 
     // Decode the function selector and parameters from data
     const functionSelector = data.slice(0, 10); // First 4 bytes (including 0x)
@@ -80,10 +95,7 @@ export async function POST(request: Request) {
       const expires = Math.floor(Date.now() / 1000) + ttl;
 
       // Calculate hashes for the original callData
-      const callData = ethers.concat([
-        ethers.getBytes(name),
-        ethers.getBytes(data),
-      ]);
+      const callData = ethers.getBytes(data);
       const requestHash = ethers.keccak256(callData);
       const resultHash = ethers.keccak256(responseData);
 
@@ -92,8 +104,9 @@ export async function POST(request: Request) {
 
       // Create message to sign (following CCIP-read format)
       const message = ethers.concat([
-        ethers.toUtf8Bytes("\x19Ethereum Signed Message:\n32"),
-        ethers.zeroPadValue(ethers.toBeHex(expires), 32),
+        ethers.hexlify([0x19, 0x00]), // Magic bytes
+        ethers.getBytes(sender), // Resolver address
+        ethers.zeroPadValue(ethers.toBeHex(expires), 8), // uint64 expires
         requestHash,
         resultHash,
       ]);
