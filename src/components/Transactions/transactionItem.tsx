@@ -45,8 +45,8 @@ export const TransactionItem: FC<TransactionItemProps> = ({
           <div className="text-sm text-zinc-400">{time}</div>
         </div>
       </div>
-      <div className={`font-medium ${amount > 0 ? 'text-emerald-400' : ''}`}>
-        {amount > 0 ? '+' : ''}${Math.abs(amount).toLocaleString()}
+      <div className={`font-medium ${amount > 0 ? 'text-red-400' : ''}`}>
+        {amount > 0 ? '-' : ''}${Math.abs(amount).toLocaleString()}
       </div>
     </a>
   );
